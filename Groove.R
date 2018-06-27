@@ -1,11 +1,9 @@
 #packages and functions and loading data
 pacman::p_load(tidyverse,rvest,tm,tidytext,ggplot2,quanteda,stm,dplyr,readability,mice)
 
-stop <- rbind(tibble(text = stopwords(source = "smart")),"ill","im","yeah","dont","hey","back","lets")
+library(textclean)
 
-nrc <- sentiments %>% filter(lexicon == "nrc") %>% select(-score, -lexicon)%>%
-  filter(sentiment %in% c("joy","fear","disgust","anger","sadness"))
-
+stop <- rbind(tibble(text = stopwords("smart")),"ill","im","yeah","dont","hey","back","lets")
 
 webpage <- read_html('http://transcripts.wikia.com/wiki/The_Emperor%27s_New_Groove')
 web_text <- html_nodes(webpage,'#mw-content-text') %>%
@@ -14,17 +12,24 @@ web_text <- html_nodes(webpage,'#mw-content-text') %>%
   unlist() %>%
   .[. != ""]
 
-webdat <- data.frame(web_text) %>% 
+webdat <- tibble(web_text) %>% 
   mutate(web_text = trimws(str_replace(web_text, "\\[.*?\\]", ""))) %>%
-  filter(web_text != "" & web_text != "Transcript Edit") %>% 
+  filter(web_text != "" & web_text != "TranscriptEdit") %>% 
   separate(web_text,into = c("speaker","text"), sep=":")
 
-webdat$text<- gsub("\\[[^\\]]*\\]", "", webdat$text, perl=TRUE);
-webdat$text<- gsub("\\([^\\]]*\\)", "", webdat$text, perl=TRUE);
+webdat$text <- gsub("\\[[^\\]]*\\]", "", webdat$text, perl=TRUE);
+webdat$text <- gsub("\\([^\\]]*\\)", "", webdat$text, perl=TRUE);
 webdat$text <- gsub('"', '', webdat$text)   
+webdat$text <- textclean::replace_non_ascii(webdat$text)
 
-
-
-text_cleanish<-webdat%>%
+text_cleanish <- webdat%>%
   filter(text != " ") %>%
-  mutate(linenumber = row_number())
+  mutate(linenumber = row_number()) %>%
+  as.tibble() %>%
+  janitor::clean_names() %>%
+  mutate(text = removePunctuation(text)) %>%
+  anti_join(stop) %>%
+  group_by(speaker) %>%
+  mutate(speaker_count = n()) %>%
+  ungroup() %>%
+  filter(speaker %in% c("Kuzco","Pacha","Yzma","Kronk"))
